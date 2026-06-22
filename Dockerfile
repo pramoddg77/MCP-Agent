@@ -1,0 +1,75 @@
+# # Stage 1: Build Dependencies
+
+# FROM python:3.11-slim as builder
+
+# WORKDIR /app
+
+# ENV PYTHONDONTWRITEBYTECODE=1
+# ENV PYTHONUNBUFFERED=1
+
+# RUN apt-get update && apt-get install -y --no-install-recommends \ 
+#         build-essential \ 
+#         && rm -rf /var/lib/apt/lists/*
+
+# COPY requirements.txt .
+# RUN python -m .venv /opt/venv
+# ENV PATH=="/opt/venv/bin:$PATH"
+# RUN pip install --no-cache-dir -r requirements.txt
+
+# # Stage 2 : Final Runtime
+
+# FROM python:3.11-slim as runner
+
+# WORKDIR /app
+
+# ENV PYTHONDONTWRITEBYTECODE=1
+# ENV PYTHONUNBUFFERED=1
+# ENV PATH=="/opt/venv/bin:$PATH"
+
+# ENV PORT=8080
+
+# COPY --from=builder /opt/venv /opt/venv
+
+# COPY . .
+
+# EXPOSE 8080
+
+# CMD ["sh", "-c", "uvicorn App.main:app --host 0.0.0.0 --port ${PORT}"]
+
+# Use a lightweight, stable Python image
+
+FROM python:3.11-slim
+
+# Prevent Python from writing .pyc files and enable unbuffered logging
+# Crucial for MCP servers communicating over stdio
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Default Port 8080
+ENV PORT=8080
+
+ENV FASTMCP_TRANSPORT_SECURITY__ALLOWED_HOSTS='["research-mcp-server-32764074468.asia-south1.run.app","localhost","127.0.0.1"]'
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Install system dependencies if required (arxiv or standard packages sometimes need curl)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements file first to leverage Docker caching
+COPY requirements.txt .
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the server code into the container
+# (Assumes your python file is named server.py)
+COPY server.py .
+
+# Inform Docker that the container listens on the specified port
+EXPOSE 8080
+
+# Run the FastMCP server via stdio
+CMD ["fastmcp", "run", "server.py", "--transport", "http", "--host", "0.0.0.0", "--port", "8080"]
